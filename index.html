@@ -1,1310 +1,1400 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Users, DollarSign, Calendar, Github, Save, Download, Eye, Lock, Unlock, Archive, Search, Filter, X, ChevronLeft, ChevronRight } from 'lucide-react';
-
-const SistemaAdelantos = () => {
-  const [empleados, setEmpleados] = useState([]);
-  const [adelantos, setAdelantos] = useState([]);
-  const [periodosMensuales, setPeriodosMensuales] = useState({});
-  const [vistaActual, setVistaActual] = useState('dashboard');
-  const [configGithub, setConfigGithub] = useState({
-    token: '',
-    repo: '',
-    owner: '',
-    configurado: false
-  });
-
-  // Estados para búsqueda y filtros
-  const [busqueda, setBusqueda] = useState({
-    texto: '',
-    empleadoId: '',
-    fechaInicio: '',
-    fechaFin: '',
-    tipo: '',
-    montoMin: '',
-    montoMax: ''
-  });
-
-  // Estados para calendario
-  const [vistaCalendario, setVistaCalendario] = useState(false);
-  const [fechaCalendario, setFechaCalendario] = useState(new Date());
-  const [adelantoSeleccionado, setAdelantoSeleccionado] = useState(null);
-
-  // Estados para formularios
-  const [nuevoEmpleado, setNuevoEmpleado] = useState({
-    nombre: '',
-    cargo: '',
-    salario: '',
-    id: ''
-  });
-
-  const [nuevoAdelanto, setNuevoAdelanto] = useState({
-    empleadoId: '',
-    monto: '',
-    fecha: new Date().toISOString().split('T')[0],
-    motivo: '',
-    tipo: 'adelanto'
-  });
-
-  const [mesActual, setMesActual] = useState(new Date().toISOString().slice(0, 7));
-  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7));
-
-  // Cargar datos desde localStorage al iniciar
-  useEffect(() => {
-    const empleadosGuardados = localStorage.getItem('empleados');
-    const adelantosGuardados = localStorage.getItem('adelantos');
-    const periodosGuardados = localStorage.getItem('periodosMensuales');
-    const configGuardada = localStorage.getItem('configGithub');
-    const mesActualGuardado = localStorage.getItem('mesActual');
-    
-    if (empleadosGuardados) {
-      setEmpleados(JSON.parse(empleadosGuardados));
-    }
-    if (adelantosGuardados) {
-      setAdelantos(JSON.parse(adelantosGuardados));
-    }
-    if (periodosGuardados) {
-      setPeriodosMensuales(JSON.parse(periodosGuardados));
-    }
-    if (configGuardada) {
-      setConfigGithub(JSON.parse(configGuardada));
-    }
-    if (mesActualGuardado) {
-      setMesActual(mesActualGuardado);
-      setMesSeleccionado(mesActualGuardado);
-    }
-  }, []);
-
-  // Guardar en localStorage cuando cambien los datos
-  useEffect(() => {
-    localStorage.setItem('empleados', JSON.stringify(empleados));
-  }, [empleados]);
-
-  useEffect(() => {
-    localStorage.setItem('adelantos', JSON.stringify(adelantos));
-  }, [adelantos]);
-
-  useEffect(() => {
-    localStorage.setItem('periodosMensuales', JSON.stringify(periodosMensuales));
-  }, [periodosMensuales]);
-
-  useEffect(() => {
-    localStorage.setItem('mesActual', mesActual);
-  }, [mesActual]);
-
-  // Función de búsqueda y filtrado
-  const filtrarAdelantos = (adelantosBase = adelantos) => {
-    return adelantosBase.filter(adelanto => {
-      const empleado = empleados.find(e => e.id === adelanto.empleadoId);
-      const nombreEmpleado = empleado ? empleado.nombre.toLowerCase() : '';
-      
-      // Filtro por texto (busca en nombre y motivo)
-      if (busqueda.texto && 
-          !nombreEmpleado.includes(busqueda.texto.toLowerCase()) && 
-          !adelanto.motivo.toLowerCase().includes(busqueda.texto.toLowerCase())) {
-        return false;
-      }
-      
-      // Filtro por empleado específico
-      if (busqueda.empleadoId && adelanto.empleadoId !== busqueda.empleadoId) {
-        return false;
-      }
-      
-      // Filtro por fecha inicio
-      if (busqueda.fechaInicio && adelanto.fecha < busqueda.fechaInicio) {
-        return false;
-      }
-      
-      // Filtro por fecha fin
-      if (busqueda.fechaFin && adelanto.fecha > busqueda.fechaFin) {
-        return false;
-      }
-      
-      // Filtro por tipo
-      if (busqueda.tipo && adelanto.tipo !== busqueda.tipo) {
-        return false;
-      }
-      
-      // Filtro por monto mínimo
-      if (busqueda.montoMin && adelanto.monto < parseFloat(busqueda.montoMin)) {
-        return false;
-      }
-      
-      // Filtro por monto máximo
-      if (busqueda.montoMax && adelanto.monto > parseFloat(busqueda.montoMax)) {
-        return false;
-      }
-      
-      return true;
-    });
-  };
-
-  // Limpiar filtros
-  const limpiarFiltros = () => {
-    setBusqueda({
-      texto: '',
-      empleadoId: '',
-      fechaInicio: '',
-      fechaFin: '',
-      tipo: '',
-      montoMin: '',
-      montoMax: ''
-    });
-  };
-
-  // Funciones del calendario
-  const obtenerDiasDelMes = (fecha) => {
-    const año = fecha.getFullYear();
-    const mes = fecha.getMonth();
-    const primerDia = new Date(año, mes, 1);
-    const ultimoDia = new Date(año, mes + 1, 0);
-    const diasAnterior = primerDia.getDay();
-    
-    const dias = [];
-    
-    // Días del mes anterior
-    for (let i = diasAnterior - 1; i >= 0; i--) {
-      const dia = new Date(año, mes, -i);
-      dias.push({ fecha: dia, esDelMes: false });
-    }
-    
-    // Días del mes actual
-    for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
-      const fecha = new Date(año, mes, dia);
-      dias.push({ fecha, esDelMes: true });
-    }
-    
-    // Días del siguiente mes para completar la grilla
-    const diasRestantes = 42 - dias.length;
-    for (let dia = 1; dia <= diasRestantes; dia++) {
-      const fecha = new Date(año, mes + 1, dia);
-      dias.push({ fecha, esDelMes: false });
-    }
-    
-    return dias;
-  };
-
-  const obtenerAdelantosDelDia = (fecha) => {
-    const fechaStr = fecha.toISOString().split('T')[0];
-    return adelantos.filter(adelanto => adelanto.fecha === fechaStr);
-  };
-
-  const navegarMesCalendario = (direccion) => {
-    const nuevaFecha = new Date(fechaCalendario);
-    nuevaFecha.setMonth(nuevaFecha.getMonth() + direccion);
-    setFechaCalendario(nuevaFecha);
-  };
-
-  // Verificar si un mes está cerrado
-  const esMesCerrado = (mes) => {
-    return periodosMensuales[mes]?.cerrado || false;
-  };
-
-  // Cerrar mes actual y crear nuevo período
-  const cerrarMesActual = () => {
-    if (window.confirm(`¿Estás seguro de que quieres cerrar el mes ${mesActual}? No podrás agregar más adelantos a este período.`)) {
-      const adelantosMes = adelantos.filter(a => a.fecha.startsWith(mesActual));
-      const totalMes = adelantosMes.reduce((sum, a) => sum + a.monto, 0);
-      
-      const nuevoPeriodo = {
-        mes: mesActual,
-        cerrado: true,
-        fechaCierre: new Date().toISOString(),
-        totalAdelantos: totalMes,
-        cantidadAdelantos: adelantosMes.length,
-        adelantos: adelantosMes.map(a => a.id)
-      };
-
-      setPeriodosMensuales(prev => ({
-        ...prev,
-        [mesActual]: nuevoPeriodo
-      }));
-
-      // Avanzar al siguiente mes
-      const fechaActual = new Date();
-      fechaActual.setMonth(fechaActual.getMonth() + 1);
-      const nuevoMes = fechaActual.toISOString().slice(0, 7);
-      setMesActual(nuevoMes);
-      setMesSeleccionado(nuevoMes);
-
-      alert(`Mes ${mesActual} cerrado exitosamente. Ahora puedes trabajar en ${nuevoMes}`);
-    }
-  };
-
-  // Reabrir un mes cerrado
-  const reabrirMes = (mes) => {
-    if (window.confirm(`¿Estás seguro de que quieres reabrir el mes ${mes}?`)) {
-      setPeriodosMensuales(prev => ({
-        ...prev,
-        [mes]: { ...prev[mes], cerrado: false }
-      }));
-      alert(`Mes ${mes} reabierto exitosamente`);
-    }
-  };
-
-  // Funciones para GitHub
-  const configurarGithub = () => {
-    if (configGithub.token && configGithub.repo && configGithub.owner) {
-      const nuevaConfig = { ...configGithub, configurado: true };
-      setConfigGithub(nuevaConfig);
-      localStorage.setItem('configGithub', JSON.stringify(nuevaConfig));
-      alert('GitHub configurado correctamente');
-    } else {
-      alert('Por favor completa todos los campos de configuración');
-    }
-  };
-
-  const sincronizarConGithub = async () => {
-    if (!configGithub.configurado) {
-      alert('Primero configura GitHub en la sección de configuración');
-      return;
-    }
-
-    const datos = {
-      empleados,
-      adelantos,
-      periodosMensuales,
-      mesActual,
-      ultimaActualizacion: new Date().toISOString()
-    };
-
-    const contenido = btoa(JSON.stringify(datos, null, 2));
-    const fecha = new Date().toISOString().split('T')[0];
-    
-    try {
-      // Intentar obtener el archivo existente para obtener el SHA
-      let sha = null;
-      try {
-        const getResponse = await fetch(`https://api.github.com/repos/${configGithub.owner}/${configGithub.repo}/contents/adelantos-data.json`, {
-          headers: {
-            'Authorization': `token ${configGithub.token}`,
-          }
-        });
-        if (getResponse.ok) {
-          const existingFile = await getResponse.json();
-          sha = existingFile.sha;
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Adelantos Empresarial</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/umd/lucide.js"></script>
+    <style>
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
         }
-      } catch (e) {
-        // El archivo no existe, se creará uno nuevo
-      }
-
-      const requestBody = {
-        message: `Actualización adelantos ${fecha} - Mes actual: ${mesActual}`,
-        content: contenido,
-      };
-
-      if (sha) {
-        requestBody.sha = sha;
-      }
-
-      const response = await fetch(`https://api.github.com/repos/${configGithub.owner}/${configGithub.repo}/contents/adelantos-data.json`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `token ${configGithub.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (response.ok) {
-        alert('Datos sincronizados con GitHub exitosamente');
-      } else {
-        const errorData = await response.json();
-        alert(`Error al sincronizar: ${errorData.message}`);
-      }
-    } catch (error) {
-      alert(`Error de conexión: ${error.message}`);
-    }
-  };
-
-  // Funciones para empleados
-  const agregarEmpleado = () => {
-    if (!nuevoEmpleado.nombre || !nuevoEmpleado.cargo) {
-      alert('Por favor completa nombre y cargo');
-      return;
-    }
-
-    const empleado = {
-      ...nuevoEmpleado,
-      id: Date.now().toString(),
-      fechaIngreso: new Date().toISOString().split('T')[0]
-    };
-
-    setEmpleados([...empleados, empleado]);
-    setNuevoEmpleado({ nombre: '', cargo: '', salario: '', id: '' });
-  };
-
-  // Funciones para adelantos
-  const agregarAdelanto = () => {
-    if (!nuevoAdelanto.empleadoId || !nuevoAdelanto.monto) {
-      alert('Por favor selecciona empleado y monto');
-      return;
-    }
-
-    const mesDelAdelanto = nuevoAdelanto.fecha.slice(0, 7);
-    
-    // Verificar si el mes está cerrado
-    if (esMesCerrado(mesDelAdelanto)) {
-      alert(`No puedes agregar adelantos al mes ${mesDelAdelanto} porque está cerrado. Para modificarlo, primero debes reabrirlo.`);
-      return;
-    }
-
-    const adelanto = {
-      ...nuevoAdelanto,
-      id: Date.now().toString(),
-      monto: parseFloat(nuevoAdelanto.monto),
-      mesRegistro: mesDelAdelanto
-    };
-
-    setAdelantos([...adelantos, adelanto]);
-    setNuevoAdelanto({
-      empleadoId: '',
-      monto: '',
-      fecha: new Date().toISOString().split('T')[0],
-      motivo: '',
-      tipo: 'adelanto'
-    });
-
-    alert('Adelanto registrado exitosamente');
-  };
-
-  // Aplicar filtros a adelantos
-  const adelantosFiltrados = filtrarAdelantos();
-  const adelantosMesSeleccionado = adelantosFiltrados.filter(adelanto => 
-    adelanto.fecha.startsWith(mesSeleccionado)
-  );
-
-  // Calcular totales del mes seleccionado
-  const totalMesSeleccionado = adelantosMesSeleccionado.reduce((sum, a) => sum + a.monto, 0);
-
-  // Obtener todos los meses únicos con datos
-  const mesesConDatos = [...new Set(adelantos.map(a => a.fecha.slice(0, 7)))].sort().reverse();
-
-  // Función para exportar datos del mes
-  const exportarDatosMes = () => {
-    const datos = {
-      mes: mesSeleccionado,
-      empleados,
-      adelantos: adelantosMesSeleccionado,
-      periodo: periodosMensuales[mesSeleccionado] || null,
-      resumen: {
-        totalMes: totalMesSeleccionado,
-        totalAdelantos: adelantosMesSeleccionado.length,
-        cerrado: esMesCerrado(mesSeleccionado)
-      },
-      fechaExportacion: new Date().toISOString()
-    };
-    
-    const dataStr = JSON.stringify(datos, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `adelantos-${mesSeleccionado}.json`;
-    link.click();
-  };
-
-  const obtenerNombreEmpleado = (empleadoId) => {
-    const empleado = empleados.find(e => e.id === empleadoId);
-    return empleado ? empleado.nombre : 'Empleado no encontrado';
-  };
-
-  // Calcular estadísticas generales
-  const totalGeneral = adelantos.reduce((sum, a) => sum + a.monto, 0);
-  const mesesCerrados = Object.values(periodosMensuales).filter(p => p.cerrado).length;
-
-  // Nombres de meses para el calendario
-  const nombresMeses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
-
-  const nombresDias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Sistema de Adelantos</h1>
-              <p className="text-sm text-gray-600">Mes actual: {mesActual} {esMesCerrado(mesActual) ? '(Cerrado)' : '(Activo)'}</p>
+        .day-cell {
+            min-height: 80px;
+            padding: 4px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            background: white;
+        }
+        .day-cell:hover {
+            background: #f9fafb;
+        }
+        .day-cell.not-current-month {
+            background: #f3f4f6;
+            color: #9ca3af;
+        }
+        .day-cell.today {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        .adelanto-indicator {
+            font-size: 10px;
+            background: #dbeafe;
+            color: #1e40af;
+            border-radius: 4px;
+            padding: 1px 4px;
+            margin: 1px 0;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <div class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Sistema de Adelantos</h1>
+                    <p class="text-sm text-gray-600">Mes actual: <span id="mesActualDisplay">2025-01</span> <span id="estadoMesActual">(Activo)</span></p>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="cambiarVista('dashboard')" id="btn-dashboard" class="px-4 py-2 rounded-lg bg-blue-600 text-white">
+                        📅 Dashboard
+                    </button>
+                    <button onclick="cambiarVista('busqueda')" id="btn-busqueda" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                        🔍 Búsqueda
+                    </button>
+                    <button onclick="cambiarVista('empleados')" id="btn-empleados" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                        👥 Empleados
+                    </button>
+                    <button onclick="cambiarVista('adelantos')" id="btn-adelantos" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                        💰 Adelantos
+                    </button>
+                    <button onclick="cambiarVista('historial')" id="btn-historial" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                        📚 Historial
+                    </button>
+                    <button onclick="cambiarVista('config')" id="btn-config" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                        🐙 GitHub
+                    </button>
+                </div>
             </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setVistaActual('dashboard')}
-                className={`px-4 py-2 rounded-lg ${vistaActual === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                <Calendar className="w-4 h-4 inline mr-2" />
-                Dashboard
-              </button>
-              <button
-                onClick={() => setVistaActual('busqueda')}
-                className={`px-4 py-2 rounded-lg ${vistaActual === 'busqueda' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                <Search className="w-4 h-4 inline mr-2" />
-                Búsqueda
-              </button>
-              <button
-                onClick={() => setVistaActual('empleados')}
-                className={`px-4 py-2 rounded-lg ${vistaActual === 'empleados' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                <Users className="w-4 h-4 inline mr-2" />
-                Empleados
-              </button>
-              <button
-                onClick={() => setVistaActual('adelantos')}
-                className={`px-4 py-2 rounded-lg ${vistaActual === 'adelantos' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                <DollarSign className="w-4 h-4 inline mr-2" />
-                Adelantos
-              </button>
-              <button
-                onClick={() => setVistaActual('historial')}
-                className={`px-4 py-2 rounded-lg ${vistaActual === 'historial' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                <Archive className="w-4 h-4 inline mr-2" />
-                Historial
-              </button>
-              <button
-                onClick={() => setVistaActual('config')}
-                className={`px-4 py-2 rounded-lg ${vistaActual === 'config' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                <Github className="w-4 h-4 inline mr-2" />
-                GitHub
-              </button>
-            </div>
-          </div>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard */}
-        {vistaActual === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Control de mes y acciones principales */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Panel de Control Mensual</h2>
-                <div className="flex space-x-3">
-                  <select
-                    value={mesSeleccionado}
-                    onChange={(e) => setMesSeleccionado(e.target.value)}
-                    className="border rounded-lg px-3 py-2"
-                  >
-                    <option value={mesActual}>📅 {mesActual} (Actual)</option>
-                    {mesesConDatos.filter(mes => mes !== mesActual).map(mes => (
-                      <option key={mes} value={mes}>
-                        {esMesCerrado(mes) ? '🔒' : '📂'} {mes}
-                      </option>
-                    ))}
-                  </select>
-                  
-                  <button
-                    onClick={() => setVistaCalendario(!vistaCalendario)}
-                    className={`px-4 py-2 rounded-lg flex items-center ${
-                      vistaCalendario ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4 mr-2" />
-                    {vistaCalendario ? 'Lista' : 'Calendario'}
-                  </button>
-                  
-                  {mesSeleccionado === mesActual && !esMesCerrado(mesActual) && (
-                    <button
-                      onClick={cerrarMesActual}
-                      className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center"
-                    >
-                      <Lock className="w-4 h-4 mr-2" />
-                      Cerrar Mes
-                    </button>
-                  )}
-                  
-                  {esMesCerrado(mesSeleccionado) && (
-                    <button
-                      onClick={() => reabrirMes(mesSeleccionado)}
-                      className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 flex items-center"
-                    >
-                      <Unlock className="w-4 h-4 mr-2" />
-                      Reabrir
-                    </button>
-                  )}
-                  
-                  <button
-                    onClick={exportarDatosMes}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Exportar
-                  </button>
-                  <button
-                    onClick={sincronizarConGithub}
-                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Sincronizar
-                  </button>
-                </div>
-              </div>
-
-              {/* Estado del mes seleccionado */}
-              {esMesCerrado(mesSeleccionado) && (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-center">
-                    <Lock className="w-5 h-5 text-orange-600" />
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-orange-800">
-                        Mes cerrado: {mesSeleccionado}
-                      </h3>
-                      <p className="text-sm text-orange-700 mt-1">
-                        Fecha de cierre: {periodosMensuales[mesSeleccionado]?.fechaCierre ? 
-                          new Date(periodosMensuales[mesSeleccionado].fechaCierre).toLocaleDateString() : 'No disponible'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Estadísticas del mes seleccionado */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <DollarSign className="w-8 h-8 text-blue-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-blue-600">Total del Mes</p>
-                      <p className="text-2xl font-bold text-blue-900">${totalMesSeleccionado.toLocaleString()}</p>
-                      <p className="text-xs text-blue-700">{mesSeleccionado}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <Calendar className="w-8 h-8 text-green-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-green-600">Adelantos</p>
-                      <p className="text-2xl font-bold text-green-900">{adelantosMesSeleccionado.length}</p>
-                      <p className="text-xs text-green-700">Transacciones</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <Users className="w-8 h-8 text-purple-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-purple-600">Empleados</p>
-                      <p className="text-2xl font-bold text-purple-900">{empleados.length}</p>
-                      <p className="text-xs text-purple-700">Registrados</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-orange-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <Archive className="w-8 h-8 text-orange-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-orange-600">Períodos</p>
-                      <p className="text-2xl font-bold text-orange-900">{mesesCerrados}</p>
-                      <p className="text-xs text-orange-700">Cerrados</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Vista de Calendario o Lista */}
-            {vistaCalendario ? (
-              <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium">
-                      Calendario - {nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()}
-                    </h3>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => navegarMesCalendario(-1)}
-                        className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setFechaCalendario(new Date())}
-                        className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
-                      >
-                        Hoy
-                      </button>
-                      <button
-                        onClick={() => navegarMesCalendario(1)}
-                        className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-6">
-                  {/* Headers de días */}
-                  <div className="grid grid-cols-7 gap-1 mb-2">
-                    {nombresDias.map(dia => (
-                      <div key={dia} className="p-2 text-center text-sm font-medium text-gray-500">
-                        {dia}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Días del calendario */}
-                  <div className="grid grid-cols-7 gap-1">
-                    {obtenerDiasDelMes(fechaCalendario).map((diaObj, index) => {
-                      const adelantosDia = obtenerAdelantosDelDia(diaObj.fecha);
-                      const totalDia = adelantosDia.reduce((sum, a) => sum + a.monto, 0);
-                      const esHoy = diaObj.fecha.toDateString() === new Date().toDateString();
-                      
-                      return (
-                        <div
-                          key={index}
-                          className={`min-h-[80px] p-1 border rounded-lg cursor-pointer hover:bg-gray-50 ${
-                            !diaObj.esDelMes ? 'bg-gray-100 text-gray-400' : 'bg-white'
-                          } ${esHoy ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
-                          onClick={() => {
-                            if (adelantosDia.length > 0) {
-                              setAdelantoSeleccionado(adelantosDia);
-                            }
-                          }}
-                        >
-                          <div className="text-sm font-medium mb-1">
-                            {diaObj.fecha.getDate()}
-                          </div>
-                          {adelantosDia.length > 0 && (
-                            <div className="space-y-1">
-                              <div className="text-xs bg-blue-100 text-blue-800 rounded px-1 py-0.5">
-                                {adelantosDia.length} adelanto{adelantosDia.length !== 1 ? 's' : ''}
-                              </div>
-                              <div className="text-xs font-semibold text-green-700">
-                                ${totalDia.toLocaleString()}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Lista de adelantos del mes seleccionado */
-              <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b">
-                  <h3 className="text-lg font-medium">Adelantos de {mesSeleccionado}</h3>
-                  {esMesCerrado(mesSeleccionado) && (
-                    <p className="text-sm text-orange-600 mt-1">⚠️ Este mes está cerrado - Solo lectura</p>
-                  )}
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Motivo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {adelantosMesSeleccionado.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
-                            No hay adelantos registrados en este mes
-                          </td>
-                        </tr>
-                      ) : (
-                        adelantosMesSeleccionado.map((adelanto) => (
-                          <tr key={adelanto.id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {obtenerNombreEmpleado(adelanto.empleadoId)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {adelanto.fecha}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                              ${adelanto.monto.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                adelanto.tipo === 'adelanto' ? 'bg-blue-100 text-blue-800' :
-                                adelanto.tipo === 'prestamo' ? 'bg-red-100 text-red-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {adelanto.tipo}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-500">
-                              {adelanto.motivo || 'Sin motivo especificado'}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Búsqueda y Filtros */}
-        {vistaActual === 'busqueda' && (
-          <div className="space-y-6">
-            {/* Panel de filtros */}
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Búsqueda y Filtros</h2>
-                <button
-                  onClick={limpiarFiltros}
-                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Limpiar
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Búsqueda por texto */}
-                <div className="md:col-span-2 lg:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Buscar por nombre o motivo
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Escribe el nombre del empleado o motivo..."
-                      value={busqueda.texto}
-                      onChange={(e) => setBusqueda({...busqueda, texto: e.target.value})}
-                      className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-                
-                {/* Filtro por empleado */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Empleado</label>
-                  <select
-                    value={busqueda.empleadoId}
-                    onChange={(e) => setBusqueda({...busqueda, empleadoId: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2"
-                  >
-                    <option value="">Todos los empleados</option>
-                    {empleados.map(empleado => (
-                      <option key={empleado.id} value={empleado.id}>
-                        {empleado.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                {/* Filtro por tipo */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
-                  <select
-                    value={busqueda.tipo}
-                    onChange={(e) => setBusqueda({...busqueda, tipo: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2"
-                  >
-                    <option value="">Todos los tipos</option>
-                    <option value="adelanto">Adelanto</option>
-                    <option value="prestamo">Préstamo</option>
-                    <option value="bono">Bono</option>
-                  </select>
-                </div>
-                
-                {/* Rango de fechas */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Fecha desde</label>
-                  <input
-                    type="date"
-                    value={busqueda.fechaInicio}
-                    onChange={(e) => setBusqueda({...busqueda, fechaInicio: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Fecha hasta</label>
-                  <input
-                    type="date"
-                    value={busqueda.fechaFin}
-                    onChange={(e) => setBusqueda({...busqueda, fechaFin: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                </div>
-                
-                {/* Rango de montos */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Monto mínimo</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={busqueda.montoMin}
-                    onChange={(e) => setBusqueda({...busqueda, montoMin: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Monto máximo</label>
-                  <input
-                    type="number"
-                    placeholder="Sin límite"
-                    value={busqueda.montoMax}
-                    onChange={(e) => setBusqueda({...busqueda, montoMax: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Resultados de búsqueda */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b">
-                <h3 className="text-lg font-medium">
-                  Resultados de búsqueda ({adelantosFiltrados.length} encontrados)
-                </h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Total: ${adelantosFiltrados.reduce((sum, a) => sum + a.monto, 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Motivo</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {adelantosFiltrados.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
-                          No se encontraron adelantos que coincidan con los filtros
-                        </td>
-                      </tr>
-                    ) : (
-                      adelantosFiltrados.map((adelanto) => (
-                        <tr key={adelanto.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {obtenerNombreEmpleado(adelanto.empleadoId)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {adelanto.fecha}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                            ${adelanto.monto.toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              adelanto.tipo === 'adelanto' ? 'bg-blue-100 text-blue-800' :
-                              adelanto.tipo === 'prestamo' ? 'bg-red-100 text-red-800' :
-                              'bg-green-100 text-green-800'
-                            }`}>
-                              {adelanto.tipo}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {adelanto.motivo || 'Sin motivo especificado'}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Gestión de Empleados */}
-        {vistaActual === 'empleados' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Agregar Nuevo Empleado</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input
-                  type="text"
-                  placeholder="Nombre completo"
-                  value={nuevoEmpleado.nombre}
-                  onChange={(e) => setNuevoEmpleado({...nuevoEmpleado, nombre: e.target.value})}
-                  className="border rounded-lg px-3 py-2"
-                />
-                <input
-                  type="text"
-                  placeholder="Cargo"
-                  value={nuevoEmpleado.cargo}
-                  onChange={(e) => setNuevoEmpleado({...nuevoEmpleado, cargo: e.target.value})}
-                  className="border rounded-lg px-3 py-2"
-                />
-                <input
-                  type="number"
-                  placeholder="Salario"
-                  value={nuevoEmpleado.salario}
-                  onChange={(e) => setNuevoEmpleado({...nuevoEmpleado, salario: e.target.value})}
-                  className="border rounded-lg px-3 py-2"
-                />
-              </div>
-              <button
-                onClick={agregarEmpleado}
-                className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar Empleado
-              </button>
-            </div>
-
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b">
-                <h3 className="text-lg font-medium">Lista de Empleados</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cargo</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salario</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Adelantos</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {empleados.map((empleado) => {
-                      const adelantosEmpleado = adelantos.filter(a => a.empleadoId === empleado.id);
-                      const totalEmpleado = adelantosEmpleado.reduce((sum, a) => sum + a.monto, 0);
-                      
-                      return (
-                        <tr key={empleado.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {empleado.nombre}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {empleado.cargo}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {empleado.salario ? `$${parseFloat(empleado.salario).toLocaleString()}` : 'No especificado'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {empleado.fechaIngreso}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ${totalEmpleado.toLocaleString()} ({adelantosEmpleado.length})
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Gestión de Adelantos */}
-        {vistaActual === 'adelantos' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Registrar Nuevo Adelanto</h2>
-              
-              {esMesCerrado(mesActual) && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-center">
-                    <Lock className="w-5 h-5 text-red-600" />
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800">
-                        Mes actual cerrado
-                      </h3>
-                      <p className="text-sm text-red-700 mt-1">
-                        No puedes agregar adelantos al mes {mesActual} porque está cerrado. Reábrelo si necesitas hacer modificaciones.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <select
-                  value={nuevoAdelanto.empleadoId}
-                  onChange={(e) => setNuevoAdelanto({...nuevoAdelanto, empleadoId: e.target.value})}
-                  className="border rounded-lg px-3 py-2"
-                  disabled={esMesCerrado(mesActual)}
-                >
-                  <option value="">Seleccionar empleado</option>
-                  {empleados.map(empleado => (
-                    <option key={empleado.id} value={empleado.id}>
-                      {empleado.nombre} - {empleado.cargo}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  placeholder="Monto"
-                  value={nuevoAdelanto.monto}
-                  onChange={(e) => setNuevoAdelanto({...nuevoAdelanto, monto: e.target.value})}
-                  className="border rounded-lg px-3 py-2"
-                  disabled={esMesCerrado(mesActual)}
-                />
-                <input
-                  type="date"
-                  value={nuevoAdelanto.fecha}
-                  onChange={(e) => setNuevoAdelanto({...nuevoAdelanto, fecha: e.target.value})}
-                  className="border rounded-lg px-3 py-2"
-                  disabled={esMesCerrado(mesActual)}
-                />
-                <select
-                  value={nuevoAdelanto.tipo}
-                  onChange={(e) => setNuevoAdelanto({...nuevoAdelanto, tipo: e.target.value})}
-                  className="border rounded-lg px-3 py-2"
-                  disabled={esMesCerrado(mesActual)}
-                >
-                  <option value="adelanto">Adelanto</option>
-                  <option value="prestamo">Préstamo</option>
-                  <option value="bono">Bono</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Motivo (opcional)"
-                  value={nuevoAdelanto.motivo}
-                  onChange={(e) => setNuevoAdelanto({...nuevoAdelanto, motivo: e.target.value})}
-                  className="border rounded-lg px-3 py-2 md:col-span-2"
-                  disabled={esMesCerrado(mesActual)}
-                />
-              </div>
-              <button
-                onClick={agregarAdelanto}
-                disabled={esMesCerrado(mesActual)}
-                className={`mt-4 px-6 py-2 rounded-lg flex items-center ${
-                  esMesCerrado(mesActual) 
-                    ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
-                    : 'bg-green-600 text-white hover:bg-green-700'
-                }`}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Registrar Adelanto
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Historial de Períodos */}
-        {vistaActual === 'historial' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Historial de Períodos Mensuales</h2>
-              
-              <div className="grid gap-4">
-                {mesesConDatos.map(mes => {
-                  const adelantosMes = adelantos.filter(a => a.fecha.startsWith(mes));
-                  const totalMes = adelantosMes.reduce((sum, a) => sum + a.monto, 0);
-                  const periodo = periodosMensuales[mes];
-                  const cerrado = esMesCerrado(mes);
-                  
-                  return (
-                    <div key={mes} className={`p-4 rounded-lg border-2 ${
-                      cerrado ? 'border-orange-200 bg-orange-50' : 'border-green-200 bg-green-50'
-                    }`}>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center">
-                          {cerrado ? <Lock className="w-5 h-5 text-orange-600 mr-3" /> : <Unlock className="w-5 h-5 text-green-600 mr-3" />}
-                          <div>
-                            <h3 className="text-lg font-medium text-gray-900">{mes}</h3>
-                            <p className="text-sm text-gray-600">
-                              {adelantosMes.length} adelantos • ${totalMes.toLocaleString()}
-                            </p>
-                            {periodo && cerrado && (
-                              <p className="text-xs text-gray-500">
-                                Cerrado: {new Date(periodo.fechaCierre).toLocaleDateString()}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => setMesSeleccionado(mes)}
-                            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 flex items-center"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            Ver
-                          </button>
-                          {cerrado && (
-                            <button
-                              onClick={() => reabrirMes(mes)}
-                              className="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700 flex items-center"
-                            >
-                              <Unlock className="w-4 h-4 mr-1" />
-                              Reabrir
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {mesesConDatos.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No hay períodos registrados aún</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Configuración GitHub */}
-        {vistaActual === 'config' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Configuración de GitHub</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Token de GitHub (Personal Access Token)
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="ghp_..."
-                    value={configGithub.token}
-                    onChange={(e) => setConfigGithub({...configGithub, token: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Crear en: GitHub → Settings → Developer settings → Personal access tokens
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Propietario del repositorio
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="tu-usuario"
-                      value={configGithub.owner}
-                      onChange={(e) => setConfigGithub({...configGithub, owner: e.target.value})}
-                      className="w-full border rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nombre del repositorio
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="adelantos-empresa"
-                      value={configGithub.repo}
-                      onChange={(e) => setConfigGithub({...configGithub, repo: e.target.value})}
-                      className="w-full border rounded-lg px-3 py-2"
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={configurarGithub}
-                  className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 flex items-center"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Guardar Configuración
-                </button>
-                {configGithub.configurado && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex">
-                      <Github className="w-5 h-5 text-green-600" />
-                      <div className="ml-3">
-                        <h3 className="text-sm font-medium text-green-800">
-                          GitHub configurado correctamente
-                        </h3>
-                        <p className="text-sm text-green-700 mt-1">
-                          Repositorio: {configGithub.owner}/{configGithub.repo}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold mb-4">Nuevas Funcionalidades</h3>
-              <div className="space-y-3 text-sm text-gray-600">
-                <div className="flex items-start">
-                  <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">🔍</div>
-                  <p><strong>Búsqueda avanzada:</strong> Filtra por nombre, fecha, monto o tipo</p>
-                </div>
-                <div className="flex items-start">
-                  <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">📅</div>
-                  <p><strong>Vista de calendario:</strong> Visualiza adelantos por fecha</p>
-                </div>
-                <div className="flex items-start">
-                  <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">🔒</div>
-                  <p><strong>Control mensual:</strong> Cierra meses para proteger datos</p>
-                </div>
-                <div className="flex items-start">
-                  <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">📊</div>
-                  <p><strong>Estadísticas:</strong> Totales separados por mes automáticamente</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal para adelantos seleccionados en calendario */}
-        {adelantoSeleccionado && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">
-                  Adelantos del día
-                </h3>
-                <button
-                  onClick={() => setAdelantoSeleccionado(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="space-y-3">
-                {adelantoSeleccionado.map(adelanto => (
-                  <div key={adelanto.id} className="border rounded-lg p-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">{obtenerNombreEmpleado(adelanto.empleadoId)}</p>
-                        <p className="text-sm text-gray-600">{adelanto.motivo || 'Sin motivo'}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">${adelanto.monto.toLocaleString()}</p>
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          adelanto.tipo === 'adelanto' ? 'bg-blue-100 text-blue-800' :
-                          adelanto.tipo === 'prestamo' ? 'bg-red-100 text-red-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {adelanto.tipo}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-3 border-t">
-                <p className="text-sm font-medium text-gray-900">
-                  Total del día: ${adelantoSeleccionado.reduce((sum, a) => sum + a.monto, 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
-  );
-};
 
-export default SistemaAdelantos;
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Dashboard -->
+        <div id="vista-dashboard" class="vista-contenido">
+            <div class="space-y-6">
+                <!-- Control de mes y acciones principales -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Panel de Control Mensual</h2>
+                        <div class="flex space-x-3">
+                            <select id="selector-mes" onchange="cambiarMesSeleccionado()" class="border rounded-lg px-3 py-2">
+                                <!-- Se llena dinámicamente -->
+                            </select>
+                            
+                            <button onclick="toggleVistaCalendario()" id="btn-calendario" class="px-4 py-2 rounded-lg flex items-center bg-gray-200 text-gray-700">
+                                📅 <span id="texto-vista-calendario">Calendario</span>
+                            </button>
+                            
+                            <button onclick="cerrarMesActual()" id="btn-cerrar-mes" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center" style="display: none;">
+                                🔒 Cerrar Mes
+                            </button>
+                            
+                            <button onclick="reabrirMes()" id="btn-reabrir-mes" class="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 flex items-center" style="display: none;">
+                                🔓 Reabrir
+                            </button>
+                            
+                            <button onclick="exportarDatos()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center">
+                                📥 Exportar
+                            </button>
+                            <button onclick="sincronizarGithub()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center">
+                                💾 Sincronizar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Estado del mes seleccionado -->
+                    <div id="alerta-mes-cerrado" class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4" style="display: none;">
+                        <div class="flex items-center">
+                            <span class="text-orange-600 mr-3">🔒</span>
+                            <div>
+                                <h3 class="text-sm font-medium text-orange-800">Mes cerrado</h3>
+                                <p class="text-sm text-orange-700 mt-1" id="fecha-cierre-mes">Este mes está cerrado</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Estadísticas del mes seleccionado -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="text-blue-600 mr-4">💰</div>
+                                <div>
+                                    <p class="text-sm font-medium text-blue-600">Total del Mes</p>
+                                    <p class="text-2xl font-bold text-blue-900" id="total-mes">$0</p>
+                                    <p class="text-xs text-blue-700" id="mes-estadistica">2025-01</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="text-green-600 mr-4">📅</div>
+                                <div>
+                                    <p class="text-sm font-medium text-green-600">Adelantos</p>
+                                    <p class="text-2xl font-bold text-green-900" id="cantidad-adelantos">0</p>
+                                    <p class="text-xs text-green-700">Transacciones</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="text-purple-600 mr-4">👥</div>
+                                <div>
+                                    <p class="text-sm font-medium text-purple-600">Empleados</p>
+                                    <p class="text-2xl font-bold text-purple-900" id="cantidad-empleados">0</p>
+                                    <p class="text-xs text-purple-700">Registrados</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-orange-50 p-4 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="text-orange-600 mr-4">📚</div>
+                                <div>
+                                    <p class="text-sm font-medium text-orange-600">Períodos</p>
+                                    <p class="text-2xl font-bold text-orange-900" id="periodos-cerrados">0</p>
+                                    <p class="text-xs text-orange-700">Cerrados</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista de Calendario o Lista -->
+                <div id="vista-lista" class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b">
+                        <h3 class="text-lg font-medium">Adelantos de <span id="titulo-mes-lista">2025-01</span></h3>
+                        <p class="text-sm text-orange-600 mt-1" id="aviso-mes-cerrado-lista" style="display: none;">⚠️ Este mes está cerrado - Solo lectura</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Motivo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-adelantos-mes" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                        No hay adelantos registrados en este mes
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Vista de Calendario -->
+                <div id="vista-calendario" class="bg-white rounded-lg shadow" style="display: none;">
+                    <div class="px-6 py-4 border-b">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-medium" id="titulo-calendario">
+                                Calendario - Enero 2025
+                            </h3>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="navegarCalendario(-1)" class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200">
+                                    ←
+                                </button>
+                                <button onclick="irHoyCalendario()" class="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">
+                                    Hoy
+                                </button>
+                                <button onclick="navegarCalendario(1)" class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200">
+                                    →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <!-- Headers de días -->
+                        <div class="calendar-grid mb-2">
+                            <div class="p-2 text-center text-sm font-medium text-gray-500">Dom</div>
+                            <div class="p-2 text-center text-sm font-medium text-gray-500">Lun</div>
+                            <div class="p-2 text-center text-sm font-medium text-gray-500">Mar</div>
+                            <div class="p-2 text-center text-sm font-medium text-gray-500">Mié</div>
+                            <div class="p-2 text-center text-sm font-medium text-gray-500">Jue</div>
+                            <div class="p-2 text-center text-sm font-medium text-gray-500">Vie</div>
+                            <div class="p-2 text-center text-sm font-medium text-gray-500">Sáb</div>
+                        </div>
+                        
+                        <!-- Días del calendario -->
+                        <div id="calendario-dias" class="calendar-grid">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Búsqueda -->
+        <div id="vista-busqueda" class="vista-contenido" style="display: none;">
+            <div class="space-y-6">
+                <!-- Panel de filtros -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Búsqueda y Filtros</h2>
+                        <button onclick="limpiarFiltros()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center">
+                            ❌ Limpiar
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Búsqueda por texto -->
+                        <div class="md:col-span-2 lg:col-span-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Buscar por nombre o motivo
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
+                                <input
+                                    type="text"
+                                    id="busqueda-texto"
+                                    placeholder="Escribe el nombre del empleado o motivo..."
+                                    onkeyup="aplicarFiltros()"
+                                    class="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+                        
+                        <!-- Filtro por empleado -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Empleado</label>
+                            <select id="filtro-empleado" onchange="aplicarFiltros()" class="w-full border rounded-lg px-3 py-2">
+                                <option value="">Todos los empleados</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Filtro por tipo -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                            <select id="filtro-tipo" onchange="aplicarFiltros()" class="w-full border rounded-lg px-3 py-2">
+                                <option value="">Todos los tipos</option>
+                                <option value="adelanto">Adelanto</option>
+                                <option value="prestamo">Préstamo</option>
+                                <option value="bono">Bono</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Rango de fechas -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Fecha desde</label>
+                            <input type="date" id="fecha-desde" onchange="aplicarFiltros()" class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Fecha hasta</label>
+                            <input type="date" id="fecha-hasta" onchange="aplicarFiltros()" class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                        
+                        <!-- Rango de montos -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Monto mínimo</label>
+                            <input type="number" id="monto-min" placeholder="0" onkeyup="aplicarFiltros()" class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Monto máximo</label>
+                            <input type="number" id="monto-max" placeholder="Sin límite" onkeyup="aplicarFiltros()" class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resultados de búsqueda -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b">
+                        <h3 class="text-lg font-medium">
+                            Resultados de búsqueda (<span id="cantidad-resultados">0</span> encontrados)
+                        </h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            Total: $<span id="total-resultados">0</span>
+                        </p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Motivo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-resultados-busqueda" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                        No se encontraron adelantos que coincidan con los filtros
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empleados -->
+        <div id="vista-empleados" class="vista-contenido" style="display: none;">
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Agregar Nuevo Empleado</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <input type="text" id="nuevo-empleado-nombre" placeholder="Nombre completo" class="border rounded-lg px-3 py-2">
+                        <input type="text" id="nuevo-empleado-cargo" placeholder="Cargo" class="border rounded-lg px-3 py-2">
+                        <input type="number" id="nuevo-empleado-salario" placeholder="Salario" class="border rounded-lg px-3 py-2">
+                    </div>
+                    <button onclick="agregarEmpleado()" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+                        ➕ Agregar Empleado
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b">
+                        <h3 class="text-lg font-medium">Lista de Empleados</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cargo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salario</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Adelantos</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-empleados" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                        No hay empleados registrados
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Adelantos -->
+        <div id="vista-adelantos" class="vista-contenido" style="display: none;">
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Registrar Nuevo Adelanto</h2>
+                    
+                    <div id="alerta-mes-cerrado-adelanto" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4" style="display: none;">
+                        <div class="flex items-center">
+                            <span class="text-red-600 mr-3">🔒</span>
+                            <div>
+                                <h3 class="text-sm font-medium text-red-800">Mes actual cerrado</h3>
+                                <p class="text-sm text-red-700 mt-1">No puedes agregar adelantos porque el mes actual está cerrado. Reábrelo si necesitas hacer modificaciones.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <select id="adelanto-empleado" class="border rounded-lg px-3 py-2">
+                            <option value="">Seleccionar empleado</option>
+                        </select>
+                        <input type="number" id="adelanto-monto" placeholder="Monto" class="border rounded-lg px-3 py-2">
+                        <input type="date" id="adelanto-fecha" class="border rounded-lg px-3 py-2">
+                        <select id="adelanto-tipo" class="border rounded-lg px-3 py-2">
+                            <option value="adelanto">Adelanto</option>
+                            <option value="prestamo">Préstamo</option>
+                            <option value="bono">Bono</option>
+                        </select>
+                        <input type="text" id="adelanto-motivo" placeholder="Motivo (opcional)" class="border rounded-lg px-3 py-2 md:col-span-2">
+                    </div>
+                    <button onclick="registrarAdelanto()" id="btn-registrar-adelanto" class="mt-4 px-6 py-2 rounded-lg flex items-center bg-green-600 text-white hover:bg-green-700">
+                        ➕ Registrar Adelanto
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historial -->
+        <div id="vista-historial" class="vista-contenido" style="display: none;">
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Historial de Períodos Mensuales</h2>
+                    
+                    <div id="lista-periodos" class="grid gap-4">
+                        <div class="text-center py-8 text-gray-500">
+                            <div class="text-gray-300 mb-4">📅</div>
+                            <p>No hay períodos registrados aún</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuración GitHub -->
+        <div id="vista-config" class="vista-contenido" style="display: none;">
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Configuración de GitHub</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Token de GitHub (Personal Access Token)
+                            </label>
+                            <input
+                                type="password"
+                                id="github-token"
+                                placeholder="ghp_..."
+                                class="w-full border rounded-lg px-3 py-2"
+                            />
+                            <p class="text-xs text-gray-500 mt-1">
+                                Crear en: GitHub → Settings → Developer settings → Personal access tokens
+                            </p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Propietario del repositorio
+                                </label>
+                                <input
+                                    type="text"
+                                    id="github-owner"
+                                    placeholder="tu-usuario"
+                                    class="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Nombre del repositorio
+                                </label>
+                                <input
+                                    type="text"
+                                    id="github-repo"
+                                    placeholder="datos-adelantos"
+                                    class="w-full border rounded-lg px-3 py-2"
+                                />
+                            </div>
+                        </div>
+                        <button onclick="guardarConfigGithub()" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 flex items-center">
+                            💾 Guardar Configuración
+                        </button>
+                        <div id="config-github-ok" class="bg-green-50 border border-green-200 rounded-lg p-4" style="display: none;">
+                            <div class="flex">
+                                <span class="text-green-600 mr-3">🐙</span>
+                                <div>
+                                    <h3 class="text-sm font-medium text-green-800">GitHub configurado correctamente</h3>
+                                    <p class="text-sm text-green-700 mt-1" id="repo-configurado">Repositorio: usuario/repo</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold mb-4">Funcionalidades del Sistema</h3>
+                    <div class="space-y-3 text-sm text-gray-600">
+                        <div class="flex items-start">
+                            <div class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">🔍</div>
+                            <p><strong>Búsqueda avanzada:</strong> Filtra por nombre, fecha, monto o tipo</p>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">📅</div>
+                            <p><strong>Vista de calendario:</strong> Visualiza adelantos por fecha</p>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">🔒</div>
+                            <p><strong>Control mensual:</strong> Cierra meses para proteger datos</p>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium mr-3 mt-0.5">📊</div>
+                            <p><strong>Estadísticas:</strong> Totales separados por mes automáticamente</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para adelantos seleccionados en calendario -->
+    <div id="modal-calendario" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Adelantos del día</h3>
+                <button onclick="cerrarModal()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div id="contenido-modal-calendario" class="space-y-3">
+                <!-- Se llena dinámicamente -->
+            </div>
+            <div class="mt-4 pt-3 border-t">
+                <p class="text-sm font-medium text-gray-900">
+                    Total del día: $<span id="total-dia-modal">0</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let empleados = JSON.parse(localStorage.getItem('empleados')) || [];
+        let adelantos = JSON.parse(localStorage.getItem('adelantos')) || [];
+        let periodosMensuales = JSON.parse(localStorage.getItem('periodosMensuales')) || {};
+        let configGithub = JSON.parse(localStorage.getItem('configGithub')) || {
+            token: '',
+            repo: '',
+            owner: '',
+            configurado: false
+        };
+        
+        let mesActual = localStorage.getItem('mesActual') || new Date().toISOString().slice(0, 7);
+        let mesSeleccionado = mesActual;
+        let vistaActual = 'dashboard';
+        let vistaCalendario = false;
+        let fechaCalendario = new Date();
+
+        // Nombres de meses
+        const nombresMeses = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ];
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', function() {
+            actualizarInterfaz();
+            document.getElementById('adelanto-fecha').value = new Date().toISOString().split('T')[0];
+        });
+
+        // Funciones de guardado
+        function guardarDatos() {
+            localStorage.setItem('empleados', JSON.stringify(empleados));
+            localStorage.setItem('adelantos', JSON.stringify(adelantos));
+            localStorage.setItem('periodosMensuales', JSON.stringify(periodosMensuales));
+            localStorage.setItem('mesActual', mesActual);
+            localStorage.setItem('configGithub', JSON.stringify(configGithub));
+        }
+
+        // Cambiar vista
+        function cambiarVista(nuevaVista) {
+            // Ocultar todas las vistas
+            document.querySelectorAll('.vista-contenido').forEach(vista => {
+                vista.style.display = 'none';
+            });
+            
+            // Resetear botones
+            document.querySelectorAll('[id^="btn-"]').forEach(btn => {
+                btn.className = btn.className.replace('bg-blue-600 text-white', 'bg-gray-200 text-gray-700');
+            });
+            
+            // Mostrar vista seleccionada
+            document.getElementById(`vista-${nuevaVista}`).style.display = 'block';
+            document.getElementById(`btn-${nuevaVista}`).className = 
+                document.getElementById(`btn-${nuevaVista}`).className.replace('bg-gray-200 text-gray-700', 'bg-blue-600 text-white');
+            
+            vistaActual = nuevaVista;
+            
+            // Actualizar contenido específico
+            if (nuevaVista === 'busqueda') {
+                actualizarFiltroEmpleados();
+                aplicarFiltros();
+            } else if (nuevaVista === 'empleados') {
+                actualizarTablaEmpleados();
+            } else if (nuevaVista === 'adelantos') {
+                actualizarSelectEmpleados();
+                actualizarEstadoAdelantos();
+            } else if (nuevaVista === 'historial') {
+                actualizarHistorial();
+            } else if (nuevaVista === 'config') {
+                cargarConfigGithub();
+            } else if (nuevaVista === 'dashboard') {
+                actualizarDashboard();
+            }
+        }
+
+        // Verificar si un mes está cerrado
+        function esMesCerrado(mes) {
+            return periodosMensuales[mes]?.cerrado || false;
+        }
+
+        // Cerrar mes actual
+        function cerrarMesActual() {
+            if (confirm(`¿Estás seguro de que quieres cerrar el mes ${mesActual}? No podrás agregar más adelantos a este período.`)) {
+                const adelantosMes = adelantos.filter(a => a.fecha.startsWith(mesActual));
+                const totalMes = adelantosMes.reduce((sum, a) => sum + a.monto, 0);
+                
+                periodosMensuales[mesActual] = {
+                    mes: mesActual,
+                    cerrado: true,
+                    fechaCierre: new Date().toISOString(),
+                    totalAdelantos: totalMes,
+                    cantidadAdelantos: adelantosMes.length,
+                    adelantos: adelantosMes.map(a => a.id)
+                };
+
+                // Avanzar al siguiente mes
+                const fechaActual = new Date();
+                fechaActual.setMonth(fechaActual.getMonth() + 1);
+                mesActual = fechaActual.toISOString().slice(0, 7);
+                mesSeleccionado = mesActual;
+
+                guardarDatos();
+                actualizarInterfaz();
+                alert(`Mes cerrado exitosamente. Ahora puedes trabajar en ${mesActual}`);
+            }
+        }
+
+        // Reabrir mes
+        function reabrirMes(mes = mesSeleccionado) {
+            if (confirm(`¿Estás seguro de que quieres reabrir el mes ${mes}?`)) {
+                if (periodosMensuales[mes]) {
+                    periodosMensuales[mes].cerrado = false;
+                }
+                guardarDatos();
+                actualizarInterfaz();
+                alert(`Mes ${mes} reabierto exitosamente`);
+            }
+        }
+
+        // Agregar empleado
+        function agregarEmpleado() {
+            const nombre = document.getElementById('nuevo-empleado-nombre').value.trim();
+            const cargo = document.getElementById('nuevo-empleado-cargo').value.trim();
+            const salario = document.getElementById('nuevo-empleado-salario').value;
+
+            if (!nombre || !cargo) {
+                alert('Por favor completa nombre y cargo');
+                return;
+            }
+
+            const empleado = {
+                id: Date.now().toString(),
+                nombre,
+                cargo,
+                salario: salario ? parseFloat(salario) : 0,
+                fechaIngreso: new Date().toISOString().split('T')[0]
+            };
+
+            empleados.push(empleado);
+            guardarDatos();
+
+            // Limpiar formulario
+            document.getElementById('nuevo-empleado-nombre').value = '';
+            document.getElementById('nuevo-empleado-cargo').value = '';
+            document.getElementById('nuevo-empleado-salario').value = '';
+
+            actualizarInterfaz();
+            alert('Empleado agregado exitosamente');
+        }
+
+        // Registrar adelanto
+        function registrarAdelanto() {
+            const empleadoId = document.getElementById('adelanto-empleado').value;
+            const monto = document.getElementById('adelanto-monto').value;
+            const fecha = document.getElementById('adelanto-fecha').value;
+            const tipo = document.getElementById('adelanto-tipo').value;
+            const motivo = document.getElementById('adelanto-motivo').value;
+
+            if (!empleadoId || !monto) {
+                alert('Por favor selecciona empleado y monto');
+                return;
+            }
+
+            const mesDelAdelanto = fecha.slice(0, 7);
+            
+            if (esMesCerrado(mesDelAdelanto)) {
+                alert(`No puedes agregar adelantos al mes ${mesDelAdelanto} porque está cerrado. Para modificarlo, primero debes reabrirlo.`);
+                return;
+            }
+
+            const adelanto = {
+                id: Date.now().toString(),
+                empleadoId,
+                monto: parseFloat(monto),
+                fecha,
+                tipo,
+                motivo: motivo.trim(),
+                mesRegistro: mesDelAdelanto
+            };
+
+            adelantos.push(adelanto);
+            guardarDatos();
+
+            // Limpiar formulario
+            document.getElementById('adelanto-empleado').value = '';
+            document.getElementById('adelanto-monto').value = '';
+            document.getElementById('adelanto-fecha').value = new Date().toISOString().split('T')[0];
+            document.getElementById('adelanto-tipo').value = 'adelanto';
+            document.getElementById('adelanto-motivo').value = '';
+
+            actualizarInterfaz();
+            alert('Adelanto registrado exitosamente');
+        }
+
+        // Obtener nombre empleado
+        function obtenerNombreEmpleado(empleadoId) {
+            const empleado = empleados.find(e => e.id === empleadoId);
+            return empleado ? empleado.nombre : 'Empleado no encontrado';
+        }
+
+        // Actualizar interfaz completa
+        function actualizarInterfaz() {
+            document.getElementById('mesActualDisplay').textContent = mesActual;
+            document.getElementById('estadoMesActual').textContent = esMesCerrado(mesActual) ? '(Cerrado)' : '(Activo)';
+            
+            actualizarSelectorMes();
+            actualizarDashboard();
+            actualizarTablaEmpleados();
+            actualizarSelectEmpleados();
+            actualizarEstadoAdelantos();
+            actualizarFiltroEmpleados();
+            actualizarHistorial();
+        }
+
+        // Actualizar selector de mes
+        function actualizarSelectorMes() {
+            const selector = document.getElementById('selector-mes');
+            const mesesConDatos = [...new Set(adelantos.map(a => a.fecha.slice(0, 7)))].sort().reverse();
+            
+            selector.innerHTML = `<option value="${mesActual}">📅 ${mesActual} (Actual)</option>`;
+            
+            mesesConDatos.filter(mes => mes !== mesActual).forEach(mes => {
+                const icono = esMesCerrado(mes) ? '🔒' : '📂';
+                selector.innerHTML += `<option value="${mes}">${icono} ${mes}</option>`;
+            });
+            
+            selector.value = mesSeleccionado;
+        }
+
+        // Cambiar mes seleccionado
+        function cambiarMesSeleccionado() {
+            mesSeleccionado = document.getElementById('selector-mes').value;
+            actualizarDashboard();
+        }
+
+        // Actualizar dashboard
+        function actualizarDashboard() {
+            const adelantosMes = adelantos.filter(a => a.fecha.startsWith(mesSeleccionado));
+            const totalMes = adelantosMes.reduce((sum, a) => sum + a.monto, 0);
+            const mesesCerrados = Object.values(periodosMensuales).filter(p => p.cerrado).length;
+
+            document.getElementById('total-mes').textContent = `$${totalMes.toLocaleString()}`;
+            document.getElementById('cantidad-adelantos').textContent = adelantosMes.length;
+            document.getElementById('cantidad-empleados').textContent = empleados.length;
+            document.getElementById('periodos-cerrados').textContent = mesesCerrados;
+            document.getElementById('mes-estadistica').textContent = mesSeleccionado;
+
+            // Mostrar/ocultar botones según el estado del mes
+            const esCerrado = esMesCerrado(mesSeleccionado);
+            const esActual = mesSeleccionado === mesActual;
+            
+            document.getElementById('btn-cerrar-mes').style.display = (esActual && !esCerrado) ? 'block' : 'none';
+            document.getElementById('btn-reabrir-mes').style.display = esCerrado ? 'block' : 'none';
+
+            // Mostrar alerta si está cerrado
+            const alerta = document.getElementById('alerta-mes-cerrado');
+            if (esCerrado) {
+                alerta.style.display = 'block';
+                const fechaCierre = periodosMensuales[mesSeleccionado]?.fechaCierre;
+                document.getElementById('fecha-cierre-mes').textContent = 
+                    `Cerrado: ${fechaCierre ? new Date(fechaCierre).toLocaleDateString() : 'Fecha desconocida'}`;
+            } else {
+                alerta.style.display = 'none';
+            }
+
+            actualizarTablaAdelantosMes();
+            if (vistaCalendario) {
+                actualizarCalendario();
+            }
+        }
+
+        // Actualizar tabla adelantos del mes
+        function actualizarTablaAdelantosMes() {
+            const tbody = document.getElementById('tabla-adelantos-mes');
+            const adelantosMes = adelantos.filter(a => a.fecha.startsWith(mesSeleccionado));
+            
+            document.getElementById('titulo-mes-lista').textContent = mesSeleccionado;
+            document.getElementById('aviso-mes-cerrado-lista').style.display = esMesCerrado(mesSeleccionado) ? 'block' : 'none';
+
+            if (adelantosMes.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                            No hay adelantos registrados en este mes
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = adelantosMes.map(adelanto => {
+                const tipoClass = {
+                    'adelanto': 'bg-blue-100 text-blue-800',
+                    'prestamo': 'bg-red-100 text-red-800',
+                    'bono': 'bg-green-100 text-green-800'
+                }[adelanto.tipo] || 'bg-gray-100 text-gray-800';
+
+                return `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${obtenerNombreEmpleado(adelanto.empleadoId)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${adelanto.fecha}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+                            $${adelanto.monto.toLocaleString()}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${tipoClass}">
+                                ${adelanto.tipo}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">
+                            ${adelanto.motivo || 'Sin motivo especificado'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Toggle vista calendario
+        function toggleVistaCalendario() {
+            vistaCalendario = !vistaCalendario;
+            document.getElementById('vista-lista').style.display = vistaCalendario ? 'none' : 'block';
+            document.getElementById('vista-calendario').style.display = vistaCalendario ? 'block' : 'none';
+            document.getElementById('texto-vista-calendario').textContent = vistaCalendario ? 'Lista' : 'Calendario';
+            document.getElementById('btn-calendario').className = vistaCalendario ? 
+                'px-4 py-2 rounded-lg flex items-center bg-indigo-600 text-white' :
+                'px-4 py-2 rounded-lg flex items-center bg-gray-200 text-gray-700';
+            
+            if (vistaCalendario) {
+                actualizarCalendario();
+            }
+        }
+
+        // Actualizar calendario
+        function actualizarCalendario() {
+            const año = fechaCalendario.getFullYear();
+            const mes = fechaCalendario.getMonth();
+            
+            document.getElementById('titulo-calendario').textContent = 
+                `Calendario - ${nombresMeses[mes]} ${año}`;
+            
+            const primerDia = new Date(año, mes, 1);
+            const ultimoDia = new Date(año, mes + 1, 0);
+            const diasAnterior = primerDia.getDay();
+            
+            const dias = [];
+            
+            // Días del mes anterior
+            for (let i = diasAnterior - 1; i >= 0; i--) {
+                const dia = new Date(año, mes, -i);
+                dias.push({ fecha: dia, esDelMes: false });
+            }
+            
+            // Días del mes actual
+            for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
+                const fecha = new Date(año, mes, dia);
+                dias.push({ fecha, esDelMes: true });
+            }
+            
+            // Días del siguiente mes para completar la grilla
+            const diasRestantes = 42 - dias.length;
+            for (let dia = 1; dia <= diasRestantes; dia++) {
+                const fecha = new Date(año, mes + 1, dia);
+                dias.push({ fecha, esDelMes: false });
+            }
+            
+            const contenedor = document.getElementById('calendario-dias');
+            contenedor.innerHTML = dias.map((diaObj, index) => {
+                const adelantosDia = obtenerAdelantosDelDia(diaObj.fecha);
+                const totalDia = adelantosDia.reduce((sum, a) => sum + a.monto, 0);
+                const esHoy = diaObj.fecha.toDateString() === new Date().toDateString();
+                
+                let clases = 'day-cell';
+                if (!diaObj.esDelMes) clases += ' not-current-month';
+                if (esHoy) clases += ' today';
+                
+                let contenidoAdelantos = '';
+                if (adelantosDia.length > 0) {
+                    contenidoAdelantos = `
+                        <div class="adelanto-indicator">
+                            ${adelantosDia.length} adelanto${adelantosDia.length !== 1 ? 's' : ''}
+                        </div>
+                        <div class="text-xs font-semibold text-green-700">
+                            $${totalDia.toLocaleString()}
+                        </div>
+                    `;
+                }
+                
+                return `
+                    <div class="${clases}" onclick="clickDiaCalendario('${diaObj.fecha.toISOString().split('T')[0]}')">
+                        <div class="text-sm font-medium mb-1">
+                            ${diaObj.fecha.getDate()}
+                        </div>
+                        ${contenidoAdelantos}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Obtener adelantos del día
+        function obtenerAdelantosDelDia(fecha) {
+            const fechaStr = fecha.toISOString().split('T')[0];
+            return adelantos.filter(adelanto => adelanto.fecha === fechaStr);
+        }
+
+        // Click en día del calendario
+        function clickDiaCalendario(fecha) {
+            const adelantosDia = adelantos.filter(a => a.fecha === fecha);
+            if (adelantosDia.length > 0) {
+                mostrarModalCalendario(adelantosDia);
+            }
+        }
+
+        // Mostrar modal calendario
+        function mostrarModalCalendario(adelantosDia) {
+            const contenido = document.getElementById('contenido-modal-calendario');
+            const totalDia = adelantosDia.reduce((sum, a) => sum + a.monto, 0);
+            
+            contenido.innerHTML = adelantosDia.map(adelanto => {
+                const tipoClass = {
+                    'adelanto': 'bg-blue-100 text-blue-800',
+                    'prestamo': 'bg-red-100 text-red-800',
+                    'bono': 'bg-green-100 text-green-800'
+                }[adelanto.tipo] || 'bg-gray-100 text-gray-800';
+
+                return `
+                    <div class="border rounded-lg p-3">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-medium">${obtenerNombreEmpleado(adelanto.empleadoId)}</p>
+                                <p class="text-sm text-gray-600">${adelanto.motivo || 'Sin motivo'}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-semibold">$${adelanto.monto.toLocaleString()}</p>
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${tipoClass}">
+                                    ${adelanto.tipo}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('total-dia-modal').textContent = totalDia.toLocaleString();
+            document.getElementById('modal-calendario').classList.add('show');
+        }
+
+        // Cerrar modal
+        function cerrarModal() {
+            document.getElementById('modal-calendario').classList.remove('show');
+        }
+
+        // Navegar calendario
+        function navegarCalendario(direccion) {
+            fechaCalendario.setMonth(fechaCalendario.getMonth() + direccion);
+            actualizarCalendario();
+        }
+
+        // Ir a hoy en calendario
+        function irHoyCalendario() {
+            fechaCalendario = new Date();
+            actualizarCalendario();
+        }
+
+        // Actualizar tabla empleados
+        function actualizarTablaEmpleados() {
+            const tbody = document.getElementById('tabla-empleados');
+            
+            if (empleados.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                            No hay empleados registrados
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = empleados.map(empleado => {
+                const adelantosEmpleado = adelantos.filter(a => a.empleadoId === empleado.id);
+                const totalEmpleado = adelantosEmpleado.reduce((sum, a) => sum + a.monto, 0);
+                
+                return `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${empleado.nombre}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${empleado.cargo}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${empleado.salario ? `$${empleado.salario.toLocaleString()}` : 'No especificado'}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${empleado.fechaIngreso}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            $${totalEmpleado.toLocaleString()} (${adelantosEmpleado.length})
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Actualizar select empleados
+        function actualizarSelectEmpleados() {
+            const select = document.getElementById('adelanto-empleado');
+            select.innerHTML = '<option value="">Seleccionar empleado</option>';
+            
+            empleados.forEach(empleado => {
+                select.innerHTML += `<option value="${empleado.id}">${empleado.nombre} - ${empleado.cargo}</option>`;
+            });
+        }
+
+        // Actualizar estado adelantos
+        function actualizarEstadoAdelantos() {
+            const esCerrado = esMesCerrado(mesActual);
+            const alerta = document.getElementById('alerta-mes-cerrado-adelanto');
+            const btn = document.getElementById('btn-registrar-adelanto');
+            const campos = ['adelanto-empleado', 'adelanto-monto', 'adelanto-fecha', 'adelanto-tipo', 'adelanto-motivo'];
+            
+            alerta.style.display = esCerrado ? 'block' : 'none';
+            
+            campos.forEach(id => {
+                document.getElementById(id).disabled = esCerrado;
+            });
+            
+            if (esCerrado) {
+                btn.className = 'mt-4 px-6 py-2 rounded-lg flex items-center bg-gray-400 text-gray-700 cursor-not-allowed';
+                btn.disabled = true;
+            } else {
+                btn.className = 'mt-4 px-6 py-2 rounded-lg flex items-center bg-green-600 text-white hover:bg-green-700';
+                btn.disabled = false;
+            }
+        }
+
+        // Actualizar filtro empleados en búsqueda
+        function actualizarFiltroEmpleados() {
+            const select = document.getElementById('filtro-empleado');
+            select.innerHTML = '<option value="">Todos los empleados</option>';
+            
+            empleados.forEach(empleado => {
+                select.innerHTML += `<option value="${empleado.id}">${empleado.nombre}</option>`;
+            });
+        }
+
+        // Aplicar filtros de búsqueda
+        function aplicarFiltros() {
+            const texto = document.getElementById('busqueda-texto').value.toLowerCase();
+            const empleadoId = document.getElementById('filtro-empleado').value;
+            const tipo = document.getElementById('filtro-tipo').value;
+            const fechaDesde = document.getElementById('fecha-desde').value;
+            const fechaHasta = document.getElementById('fecha-hasta').value;
+            const montoMin = parseFloat(document.getElementById('monto-min').value) || 0;
+            const montoMax = parseFloat(document.getElementById('monto-max').value) || Infinity;
+
+            const adelantosFiltrados = adelantos.filter(adelanto => {
+                const empleado = empleados.find(e => e.id === adelanto.empleadoId);
+                const nombreEmpleado = empleado ? empleado.nombre.toLowerCase() : '';
+                
+                // Filtros
+                if (texto && !nombreEmpleado.includes(texto) && !adelanto.motivo.toLowerCase().includes(texto)) return false;
+                if (empleadoId && adelanto.empleadoId !== empleadoId) return false;
+                if (tipo && adelanto.tipo !== tipo) return false;
+                if (fechaDesde && adelanto.fecha < fechaDesde) return false;
+                if (fechaHasta && adelanto.fecha > fechaHasta) return false;
+                if (adelanto.monto < montoMin || adelanto.monto > montoMax) return false;
+                
+                return true;
+            });
+
+            const totalResultados = adelantosFiltrados.reduce((sum, a) => sum + a.monto, 0);
+            
+            document.getElementById('cantidad-resultados').textContent = adelantosFiltrados.length;
+            document.getElementById('total-resultados').textContent = totalResultados.toLocaleString();
+
+            const tbody = document.getElementById('tabla-resultados-busqueda');
+            
+            if (adelantosFiltrados.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                            No se encontraron adelantos que coincidan con los filtros
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = adelantosFiltrados.map(adelanto => {
+                const tipoClass = {
+                    'adelanto': 'bg-blue-100 text-blue-800',
+                    'prestamo': 'bg-red-100 text-red-800',
+                    'bono': 'bg-green-100 text-green-800'
+                }[adelanto.tipo] || 'bg-gray-100 text-gray-800';
+
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${obtenerNombreEmpleado(adelanto.empleadoId)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${adelanto.fecha}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+                            $${adelanto.monto.toLocaleString()}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${tipoClass}">
+                                ${adelanto.tipo}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">
+                            ${adelanto.motivo || 'Sin motivo especificado'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Limpiar filtros
+        function limpiarFiltros() {
+            document.getElementById('busqueda-texto').value = '';
+            document.getElementById('filtro-empleado').value = '';
+            document.getElementById('filtro-tipo').value = '';
+            document.getElementById('fecha-desde').value = '';
+            document.getElementById('fecha-hasta').value = '';
+            document.getElementById('monto-min').value = '';
+            document.getElementById('monto-max').value = '';
+            aplicarFiltros();
+        }
+
+        // Actualizar historial
+        function actualizarHistorial() {
+            const contenedor = document.getElementById('lista-periodos');
+            const mesesConDatos = [...new Set(adelantos.map(a => a.fecha.slice(0, 7)))].sort().reverse();
+            
+            if (mesesConDatos.length === 0) {
+                contenedor.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <div class="text-gray-300 mb-4">📅</div>
+                        <p>No hay períodos registrados aún</p>
+                    </div>
+                `;
+                return;
+            }
+
+            contenedor.innerHTML = mesesConDatos.map(mes => {
+                const adelantosMes = adelantos.filter(a => a.fecha.startsWith(mes));
+                const totalMes = adelantosMes.reduce((sum, a) => sum + a.monto, 0);
+                const periodo = periodosMensuales[mes];
+                const cerrado = esMesCerrado(mes);
+                
+                const colorClass = cerrado ? 'border-orange-200 bg-orange-50' : 'border-green-200 bg-green-50';
+                const icono = cerrado ? '🔒' : '🔓';
+                
+                let fechaCierre = '';
+                if (periodo && cerrado) {
+                    fechaCierre = `<p class="text-xs text-gray-500">Cerrado: ${new Date(periodo.fechaCierre).toLocaleDateString()}</p>`;
+                }
+                
+                return `
+                    <div class="p-4 rounded-lg border-2 ${colorClass}">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <span class="mr-3">${icono}</span>
+                                <div>
+                                    <h3 class="text-lg font-medium text-gray-900">${mes}</h3>
+                                    <p class="text-sm text-gray-600">
+                                        ${adelantosMes.length} adelantos • $${totalMes.toLocaleString()}
+                                    </p>
+                                    ${fechaCierre}
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="verMes('${mes}')" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 flex items-center">
+                                    👁️ Ver
+                                </button>
+                                ${cerrado ? `<button onclick="reabrirMes('${mes}')" class="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700 flex items-center">🔓 Reabrir</button>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Ver mes específico
+        function verMes(mes) {
+            mesSeleccionado = mes;
+            cambiarVista('dashboard');
+        }
+
+        // Cargar configuración GitHub
+        function cargarConfigGithub() {
+            document.getElementById('github-token').value = configGithub.token || '';
+            document.getElementById('github-owner').value = configGithub.owner || '';
+            document.getElementById('github-repo').value = configGithub.repo || '';
+            
+            if (configGithub.configurado) {
+                document.getElementById('config-github-ok').style.display = 'block';
+                document.getElementById('repo-configurado').textContent = `Repositorio: ${configGithub.owner}/${configGithub.repo}`;
+            } else {
+                document.getElementById('config-github-ok').style.display = 'none';
+            }
+        }
+
+        // Guardar configuración GitHub
+        function guardarConfigGithub() {
+            const token = document.getElementById('github-token').value.trim();
+            const owner = document.getElementById('github-owner').value.trim();
+            const repo = document.getElementById('github-repo').value.trim();
+
+            if (!token || !owner || !repo) {
+                alert('Por favor completa todos los campos de configuración');
+                return;
+            }
+
+            configGithub = {
+                token,
+                owner,
+                repo,
+                configurado: true
+            };
+
+            guardarDatos();
+            cargarConfigGithub();
+            alert('GitHub configurado correctamente');
+        }
+
+        // Sincronizar con GitHub
+        async function sincronizarGithub() {
+            if (!configGithub.configurado) {
+                alert('Primero configura GitHub en la pestaña GitHub');
+                return;
+            }
+
+            const datos = {
+                empleados,
+                adelantos,
+                periodosMensuales,
+                mesActual,
+                ultimaActualizacion: new Date().toISOString()
+            };
+
+            const contenido = btoa(JSON.stringify(datos, null, 2));
+            const fecha = new Date().toISOString().split('T')[0];
+            
+            try {
+                // Intentar obtener el archivo existente para obtener el SHA
+                let sha = null;
+                try {
+                    const getResponse = await fetch(`https://api.github.com/repos/${configGithub.owner}/${configGithub.repo}/contents/adelantos-data.json`, {
+                        headers: {
+                            'Authorization': `token ${configGithub.token}`,
+                        }
+                    });
+                    if (getResponse.ok) {
+                        const existingFile = await getResponse.json();
+                        sha = existingFile.sha;
+                    }
+                } catch (e) {
+                    console.log('Archivo no existe, se creará uno nuevo');
+                }
+
+                const requestBody = {
+                    message: `Actualización adelantos ${fecha} - Mes actual: ${mesActual}`,
+                    content: contenido,
+                };
+
+                if (sha) {
+                    requestBody.sha = sha;
+                }
+
+                const response = await fetch(`https://api.github.com/repos/${configGithub.owner}/${configGithub.repo}/contents/adelantos-data.json`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${configGithub.token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (response.ok) {
+                    alert('✅ Datos sincronizados con GitHub exitosamente');
+                } else {
+                    const errorData = await response.json();
+                    alert(`❌ Error al sincronizar: ${errorData.message}`);
+                }
+            } catch (error) {
+                alert(`❌ Error de conexión: ${error.message}`);
+            }
+        }
+
+        // Exportar datos
+        function exportarDatos() {
+            const adelantosMes = adelantos.filter(a => a.fecha.startsWith(mesSeleccionado));
+            const totalMes = adelantosMes.reduce((sum, a) => sum + a.monto, 0);
+            
+            const datos = {
+                mes: mesSeleccionado,
+                empleados,
+                adelantos: adelantosMes,
+                periodo: periodosMensuales[mesSeleccionado] || null,
+                resumen: {
+                    totalMes,
+                    totalAdelantos: adelantosMes.length,
+                    cerrado: esMesCerrado(mesSeleccionado)
+                },
+                fechaExportacion: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(datos, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `adelantos-${mesSeleccionado}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('modal-calendario').addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarModal();
+            }
+        });
+    </script>
+</body>
+</html>
